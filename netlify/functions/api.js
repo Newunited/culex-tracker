@@ -5,12 +5,14 @@ const who=code=>{let C={};try{C=JSON.parse(process.env.CODES||'{}')}catch(e){}co
 const gh=(p,o={})=>fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/contents/${p}`,{cache:'no-store',...o,headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json','User-Agent':'culex-tracker'}});
 async function load(n,def){const r=await gh(`${n}?ref=${BRANCH}`);if(r.status===404)return{data:def,sha:null};if(!r.ok)throw new Error('GitHub read error '+r.status);const j=await r.json();return{data:JSON.parse(Buffer.from(j.content,'base64').toString()),sha:j.sha}}
 async function save(n,data,sha,msg){const body={message:msg,branch:BRANCH,content:Buffer.from(JSON.stringify(data,null,1)).toString('base64')};if(sha)body.sha=sha;
- const r=await gh(n,{method:'PUT',body:JSON.stringify(body)});if(r.status===409||r.status===422){const e=new Error('conflict');e.conflict=true;throw e}if(!r.ok)throw new Error('GitHub write error '+r.status)}
+ const r=await gh(n,{method:'PUT',body:JSON.stringify(body)});if(r.status===409||r.status===422){const e=new Error('conflict');e.conflict=true;throw e}if(r.status===404)throw new Error('GitHub 404: repository not found or token has no access. Check GITHUB_REPO and GITHUB_TOKEN');if(!r.ok)throw new Error('GitHub write error '+r.status)}
 async function update(n,def,fn,msg){for(let i=0;i<4;i++){const{data,sha}=await load(n,def),out=fn(data);try{await save(n,out,sha,msg);return out}catch(e){if(!e.conflict)throw e}}throw new Error('System busy, please try again')}
 async function roster(){let{data}=await load('roster.json',null);if(!data){try{await save('roster.json',SEED,null,'Seed roster')}catch(e){}data=(await load('roster.json',SEED)).data}return data}
-async function payload(b){const m=b===-1,R0=await roster(),L=(await load('leave.json',[])).data,R=(await load('resign.json',[])).data;
- return{m,b,BR:BRANCHES,TI:TITLES,E:m?R0:R0.filter(e=>e[3]===b),L:m?L:L.filter(l=>l.b===b),R:m?R:R.filter(r=>r.b===b)}}
-exports.handler=async ev=>{try{if(ev.httpMethod!=='POST')return json(405,{error:'POST only'});
+async function sett(){return (await load('settings.json',{full:{},mail:{}})).data}
+async function payload(b){const m=b===-1,R0=await roster(),S=await sett(),L=(await load('leave.json',[])).data,R=(await load('resign.json',[])).data;
+ return{m,b,S:m?S:{full:{[b]:(S.full||{})[b]},mail:{}},BR:BRANCHES,TI:TITLES,E:m?R0:R0.filter(e=>e[3]===b),L:m?L:L.filter(l=>l.b===b),R:m?R:R.filter(r=>r.b===b)}}
+exports.handler=async ev=>{try{if(ev.httpMethod==='GET'&&(ev.queryStringParameters||{}).photo){const p=ev.queryStringParameters,pb=who(p.code);if(pb===null)return json(401,{});const pid=+p.photo;if(!(await roster()).some(e=>e[0]===pid&&(pb===-1||e[3]===pb)))return json(403,{});const{data}=await load('photos/'+pid+'.json',null);if(!data)return{statusCode:404,body:''};return{statusCode:200,isBase64Encoded:true,headers:{'Content-Type':'image/jpeg','Cache-Control':'private, max-age=60'},body:data.d.split(',')[1]}}
+ if(ev.httpMethod!=='POST')return json(405,{error:'POST only'});
  const q=JSON.parse(ev.body||'{}'),b=who(q.code),x=q.x||{},today=new Date().toISOString().slice(0,10),id=crypto.randomUUID().slice(0,8);
  if(b===null)return json(401,{error:'Invalid code'});const m=b===-1;
  if(q.action==='add'){if(m)throw new Error('Not allowed');if(!(await roster()).some(e=>e[0]===+x.e&&e[3]===b))throw new Error('Employee not in your branch');
@@ -20,5 +22,9 @@ exports.handler=async ev=>{try{if(ev.httpMethod!=='POST')return json(405,{error:
  else if(q.action==='addEmp'){if(!m)throw new Error('Master only');const n=String(x.name||'').trim(),t=String(x.title||'').trim(),bb=+x.b;if(!n||!t||!(bb>=0&&bb<BRANCHES.length))throw new Error('Enter name, position and branch');
   await roster();await update('roster.json',SEED,a=>{const nid=+x.id||Math.max(0,...a.map(e=>e[0]))+1;if(a.some(e=>e[0]===nid))throw new Error('Emp ID '+nid+' already exists');return[...a,[nid,n,t,bb]]},'Add employee')}
  else if(q.action==='delEmp'){if(!m)throw new Error('Master only');await roster();await update('roster.json',SEED,a=>a.filter(e=>e[0]!==+q.id),'Remove employee')}
+ else if(q.action==='setFull'){if(!m)throw new Error('Master only');await update('settings.json',{full:{},mail:{}},s=>({...s,full:{...s.full,[+x.b]:+x.n||0}}),'Set headcount')}
+ else if(q.action==='setMail'){if(!m)throw new Error('Master only');await update('settings.json',{full:{},mail:{}},s=>({...s,mail:{...s.mail,[+x.b]:String(x.mail||'').trim()}}),'Set email')}
+ else if(q.action==='updEmp'){if(!m)throw new Error('Master only');await roster();await update('roster.json',SEED,a=>a.map(e=>e[0]===+x.id?[e[0],e[1],e[2],e[3],x.join||'',x.end||'']:e),'Update employee')}
+ else if(q.action==='photo'){const R0=await roster();if(!R0.some(e=>e[0]===+x.id&&(m||e[3]===b)))throw new Error('Not allowed');if(!/^data:image\/jpeg;base64,/.test(x.d)||x.d.length>150000)throw new Error('Photo too large');await update('photos/'+(+x.id)+'.json',{},()=>({d:x.d}),'Photo')}
  return json(200,await payload(b))}catch(e){return json(400,{error:e.message})}};
-exports.lib={load,update,roster,BRANCHES};
+exports.lib={load,update,roster,sett,BRANCHES};
