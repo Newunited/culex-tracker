@@ -76,3 +76,4 @@ function rm(t,id){if(confirm("Remove this entry?"))run("remove",{kind:t,id})}
 function ae(){const n=$("#en").value.trim();if(!n)return alert("Enter the full name");run("addEmp",{x:{id:$("#ei").value.trim(),name:n,title:$("#et").value,b:MB}})}
 function de(id){if(confirm("Remove this employee from the branch list?"))run("delEmp",{id})}
 draw();if(sessionStorage.c)run("data");
+</script></body></html>
