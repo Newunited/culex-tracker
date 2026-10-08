@@ -1,7 +1,4 @@
-const {lib}=require('./api.js');
-const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
-const ad=(d,n)=>{const t=new Date(d+'T00:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
-const am=(d,n)=>{const t=new Date(d+'T00:00:00Z');t.setUTCMonth(t.getUTCMonth()+n);return t.toISOString().slice(0,10)};
+
 const send=async(to,subject,html)=>{const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.MAIL_FROM||'Culex Tracker <onboarding@resend.dev>',to,subject,html})});if(!r.ok)throw new Error('Email error '+r.status+' to '+to)};
 const tbl=(h,rows)=>`<table border="1" cellpadding="6" style="border-collapse:collapse"><tr>${h.map(v=>'<th>'+v+'</th>').join('')}</tr>${rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')}</table>`;
 exports.handler=async()=>{try{
