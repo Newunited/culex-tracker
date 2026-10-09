@@ -11,7 +11,7 @@ exports.handler=async()=>{try{
  const L=(await lib.load('leave.json',[])).data.filter(l=>!l.n&&(l.a==='Approved'||l.a==='Pending')&&l.s>=today&&l.s<=am(today,4)&&em(l.e)&&!res.has(l.e)).sort((a,b)=>a.s.localeCompare(b.s));
  const C=roster.filter(e=>e[5]&&e[5]>=today&&e[5]<=am(today,2)&&!res.has(e[0])&&sentC[e[0]]!==e[5]).sort((a,b)=>a[5].localeCompare(b[5]));
  if(!L.length&&!C.length)return{statusCode:200,body:'Nothing to send'};
- const body=(l,c,br)=>(l.length?`<p>Leave starting within 4 months:</p>`+tbl(['Employee',...(br?['Branch']:[]),'Position','Leave starts','Returns on','Status'],l.map(x=>[em(x.e)[1],...(br?[lib.BRANCHES[x.b]]:[]),em(x.e)[2],x.s,ad(x.d,1),x.a])):'')+(c.length?`<p>Contracts ending within 2 months:</p>`+tbl(['Employee',...(br?['Branch']:[]),'Position','Contract ends'],c.map(e=>[e[1],...(br?[lib.BRANCHES[e[3]]]:[]),e[2],e[5]])):'');
+ const body=(l,c,br)=>(l.length?`<p>Leave starting within 4 months:</p>`+tbl(['Employee',...(br?['Branch']:[]),'Position','Leave starts','Returns on','Status'],l.map(x=>[em(x.e)[1],...(br?[lib.BRANCHES[x.b]]:[]),em(x.e)[2],x.s,x.rd||ad(x.d,1),x.a])):'')+(c.length?`<p>Contracts ending within 2 months:</p>`+tbl(['Employee',...(br?['Branch']:[]),'Position','Contract ends'],c.map(e=>[e[1],...(br?[lib.BRANCHES[e[3]]]:[]),e[2],e[5]])):'');
  const errs=[];
  for(let b=0;b<lib.BRANCHES.length;b++){const l=L.filter(x=>x.b===b),c=C.filter(e=>e[3]===b),to=(S.mail||{})[b];if(to&&(l.length||c.length)){try{await send([to],lib.BRANCHES[b]+': leave and contract reminders',body(l,c,false))}catch(e){errs.push(e.message)}}}
  await send(master,'Culex: leave and contract reminders ('+(L.length+C.length)+')',body(L,C,true));
