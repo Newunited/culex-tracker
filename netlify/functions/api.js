@@ -23,16 +23,14 @@ exports.handler=async ev=>{try{if(ev.httpMethod==='GET'&&(ev.queryStringParamete
  if(ev.httpMethod!=='POST')return json(405,{error:'POST only'});
  const q=JSON.parse(ev.body||'{}'),b=who(q.code),x=q.x||{},today=new Date().toISOString().slice(0,10),id=crypto.randomUUID().slice(0,8);
  if(b===null)return json(401,{error:'Invalid code'});const m=b===-1;
- const logA=async msg=>{await update('log/'+today.slice(0,7)+'/'+(m?'m':b)+'.json',[],a=>[...a,{t:new Date().toISOString(),w:m?'Master':BRANCHES[b],a:msg}].slice(-2000),'Log')};
- if(q.action==='logGet'){const mo=String(x.month).slice(0,7),ks=m?[...BRANCHES.keys(),'m']:[b],out=[];for(const k of ks)(await load('log/'+mo+'/'+k+'.json',[])).data.forEach(r=>out.push(r));out.sort((p1,p2)=>p2.t.localeCompare(p1.t));return json(200,{log:out.slice(0,500)})}
  if(q.action==='attGet'){const bb=m?+x.b:b;return json(200,{att:(await load(af(bb,String(x.month).slice(0,7)),{})).data})}
  if(q.action==='attSave'){const bb=m?+x.b:b,d=String(x.date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))throw new Error('Invalid date');const own=new Set((await roster()).filter(e=>e[3]===bb).map(e=>e[0]));const dub=new Date(Date.now()+4*36e5).toISOString().slice(0,10),min3=new Date(Date.now()+4*36e5-3*864e5).toISOString().slice(0,10);if(!m&&(d>dub||d<min3))throw new Error('Branches can edit attendance only for the last 3 days. Ask the central team for older dates.');
-  await update(af(bb,d.slice(0,7)),{},a=>{for(const[k,c]of Object.entries(x.rows||{}))if(AC.includes(c)&&own.has(+k)){a[k]=a[k]||{};a[k][d]=c}return a},'Attendance '+d);await logA('attendance '+d+' ('+Object.keys(x.rows||{}).length+' staff)');return json(200,{ok:1})}
+  await update(af(bb,d.slice(0,7)),{},a=>{for(const[k,c]of Object.entries(x.rows||{}))if(AC.includes(c)&&own.has(+k)){a[k]=a[k]||{};a[k][d]=c}return a},'Attendance '+d);return json(200,{ok:1})}
  if(q.action==='attRep'){const f=String(x.from),t=String(x.to),ms=[];for(let d=new Date(f.slice(0,7)+'-01T00:00:00Z');d.toISOString().slice(0,10)<=t&&ms.length<4;d.setUTCMonth(d.getUTCMonth()+1))ms.push(d.toISOString().slice(0,7));
   const rows=[];for(let bb=0;bb<BRANCHES.length;bb++){if(!m&&bb!==b)continue;const tot={};for(const mo of ms){const a=(await load(af(bb,mo),{})).data;for(const[k,v]of Object.entries(a))for(const[d,c]of Object.entries(v))if(d>=f&&d<=t){tot[k]=tot[k]||{};tot[k][c]=(tot[k][c]||0)+1}}for(const[k,c]of Object.entries(tot))rows.push({b:bb,e:+k,c})}
   return json(200,{rows})}
  if(q.action==='add'){if(m)throw new Error('Not allowed');if(!(await roster()).some(e=>e[0]===+x.e&&e[3]===b))throw new Error('Employee not in your branch');
-  if(q.kind==='L'){if(!x.s||!x.d||x.d<x.s)throw new Error('Invalid dates');await update('leave.json',[],a=>[...a,{id,b,e:+x.e,t:x.t,s:x.s,d:x.d,a:x.a,u:today}],'Add leave')}
+  if(q.kind==='L'){if(!x.s||!x.d||x.d<x.s)throw new Error('Invalid dates');if(x.rd&&x.rd<=x.d)throw new Error('Return date must be after the end date');await update('leave.json',[],a=>[...a,{id,b,e:+x.e,t:x.t,s:x.s,d:x.d,rd:x.rd||'',a:x.a,u:today}],'Add leave')}
   else{if(!x.d||!x.ap)throw new Error('Enter the approval date and the last working day');await update('resign.json',[],a=>[...a,{id,b,e:+x.e,d:x.d,r:x.r,ap:x.ap,u:today}],'Add resignation')}}
  else if(q.action==='remove'){if(m)throw new Error('Not allowed');await update(q.kind==='L'?'leave.json':'resign.json',[],a=>a.filter(r=>!(r.id===q.id&&r.b===b)),'Remove entry')}
  else if(q.action==='addEmp'){if(!m)throw new Error('Master only');const n=String(x.name||'').trim(),t=String(x.title||'').trim(),bb=+x.b;if(!n||!t||!(bb>=0&&bb<BRANCHES.length))throw new Error('Enter name, position and branch');
@@ -44,6 +42,5 @@ exports.handler=async ev=>{try{if(ev.httpMethod==='GET'&&(ev.queryStringParamete
  else if(q.action==='setMail'){if(!m)throw new Error('Master only');await update('settings.json',{full:{},mail:{}},s=>({...s,mail:{...s.mail,[+x.b]:String(x.mail||'').trim()}}),'Set email')}
  else if(q.action==='updEmp'){if(!m)throw new Error('Master only');await roster();await update('roster.json',SEED,a=>a.map(e=>e[0]===+x.id?[e[0],e[1],e[2],e[3],x.join!==undefined?x.join:(e[4]||''),x.end!==undefined?x.end:(e[5]||''),x.sal!==undefined?(Array.isArray(x.sal)?x.sal.map(Number).slice(0,4):null):(e[6]||null)]:e),'Update employee')}
  else if(q.action==='photo'){const R0=await roster();if(!R0.some(e=>e[0]===+x.id&&(m||e[3]===b)))throw new Error('Not allowed');if(!/^data:image\/jpeg;base64,/.test(x.d)||x.d.length>150000)throw new Error('Photo too large');await update('photos/'+(+x.id)+'.json',{},()=>({d:x.d}),'Photo')}
- {const sx={...x};if(q.action==='photo')delete sx.d;delete sx.data;delete sx.rows;if(sx.sal){delete sx.sal;sx.salary='changed'}const en=(await roster()).find(e=>e[0]===+(x.e||x.id||q.id));await logA(q.action+(q.kind?'('+q.kind+')':'')+': '+(en?en[1]+' ':'')+JSON.stringify(sx)+(q.id?' id='+q.id:''))}
  return json(200,await payload(b))}catch(e){return json(400,{error:e.message})}};
 exports.lib={load,update,roster,sett,BRANCHES};
